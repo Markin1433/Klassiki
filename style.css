@@ -248,3 +248,32 @@ h1::after{
   .container{ padding:32px 14px 60px; }
   #groupsList{ grid-template-columns:1fr; }
 }
+/* ===== Кнопка «Наверх» ===== */
+.scroll-top{
+  position:fixed;
+  right:24px;
+  bottom:28px;
+  width:52px;
+  height:52px;
+  border:none;
+  border-radius:50%;
+  background:var(--primary);
+  color:#fff;
+  font-size:1.5rem;
+  cursor:pointer;
+  opacity:0;
+  visibility:hidden;
+  transform:translateY(15px);
+  transition:opacity .25s ease, transform .25s ease, visibility .25s, background .2s;
+  box-shadow:0 8px 20px rgba(12,92,76,.35);
+  z-index:150;
+}
+.scroll-top.show{
+  opacity:1;
+  visibility:visible;
+  transform:translateY(0);
+}
+.scroll-top:hover{
+  background:var(--primary-dark);
+  transform:translateY(-3px);
+}
