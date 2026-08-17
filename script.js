@@ -293,3 +293,17 @@ function plural(n, one, few, many){
 function escapeHtml(s){
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// ============================================================
+// 7. КНОПКА «НАВЕРХ»
+// ============================================================
+const scrollTopBtn = document.getElementById('scrollTopBtn');
+
+// Показываем кнопку, когда прокрутили страницу вниз
+window.addEventListener('scroll', () => {
+  scrollTopBtn.classList.toggle('show', window.scrollY > 300);
+});
+
+// Плавная прокрутка в самый верх
+scrollTopBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
