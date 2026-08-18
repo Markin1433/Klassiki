@@ -1,8 +1,3 @@
-// ============================================================
-//  ПОДБОР ГРУППЫ ТЕМ И ТЕМЫ — логика сайта
-// ============================================================
-
-// ---------- Элементы страницы ----------
 const groupsList      = document.getElementById('groupsList');
 const topicsList      = document.getElementById('topicsList');
 const topicsSection   = document.getElementById('topicsSection');
@@ -14,14 +9,10 @@ const selectedDescEl  = document.getElementById('selectedDescription');
 const statsEl         = document.getElementById('stats');
 const notification    = document.getElementById('copyNotification');
 
-// ---------- Состояние ----------
-let allItems      = [];   // [{group, topic, description}, ...]
-let selectedGroup = null; // название выбранной группы
-let selectedTopic = null; // объект {topic, description}
+let allItems      = [];
+let selectedGroup = null;
+let selectedTopic = null;
 
-// ============================================================
-// 1. ЗАГРУЗКА ДАННЫХ ИЗ themes.json
-// ============================================================
 fetch('themes.json')
   .then(response => {
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -32,8 +23,6 @@ fetch('themes.json')
     try {
       data = JSON.parse(text);
     } catch (e) {
-      // В файле встречаются кавычки внутри текста (например, "ДЕТИ ВОЙНЫ").
-      // Аккуратно экранируем их и пробуем распарсить снова.
       data = JSON.parse(repairJSON(text));
     }
     allItems = normalize(data);
@@ -47,8 +36,6 @@ fetch('themes.json')
       'Техническая ошибка: ' + error.message + '</div>';
   });
 
-// Приводим данные к удобному виду: в вашем файле ключи и значения
-// содержат лишние пробелы ("group ", "БЕЗОПАСНОСТЬ... ") — убираем их
 function normalize(raw){
   return raw.map(item => {
     const get = name => {
@@ -63,7 +50,6 @@ function normalize(raw){
   }).filter(item => item.group && item.topic);
 }
 
-// Чинит JSON, если внутри строк встречаются «лишние» кавычки
 function repairJSON(text){
   let result = '';
   let inString = false;
@@ -73,19 +59,18 @@ function repairJSON(text){
       if (ch === '"') inString = true;
       result += ch;
     } else {
-      if (ch === '\\'){                     // уже экранированный символ
+      if (ch === '\\'){
         result += ch + (text[i + 1] || '');
         i++;
       } else if (ch === '"'){
-        // Смотрим, какой значимый символ идёт после кавычки
         let j = i + 1;
         while (j < text.length && /\s/.test(text[j])) j++;
         const next = text[j];
         if (next === ',' || next === ':' || next === '}' || next === ']' || next === undefined){
-          inString = false;                 // настоящая закрывающая кавычка
+          inString = false;
           result += ch;
         } else {
-          result += '\\"';                  // кавычка внутри текста — экранируем
+          result += '\\"';
         }
       } else {
         result += ch;
@@ -95,9 +80,6 @@ function repairJSON(text){
   return result;
 }
 
-// ============================================================
-// 2. ИНИЦИАЛИЗАЦИЯ
-// ============================================================
 function init(){
   const groups = getGroups();
   statsEl.innerHTML = 'В базе: <b>' + groups.length + '</b> ' +
@@ -107,7 +89,6 @@ function init(){
 
   renderGroups('');
 
-  // Живой поиск
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
     const visible = renderGroups(q);
@@ -121,21 +102,19 @@ function init(){
     }
   });
 
-  // Кнопки копирования
   document.getElementById('copyGroupBtn').addEventListener('click', () => {
     if (selectedGroup) copyText(selectedGroup);
   });
   document.getElementById('copyTopicBtn').addEventListener('click', () => {
     if (selectedTopic) copyText(selectedTopic.topic);
   });
-  document.getElementById('copyBothBtn').addEventListener('click', () => {
-    if (selectedGroup && selectedTopic) copyText(selectedGroup + '\n' + selectedTopic.topic);
+    document.getElementById('copyBothBtn').addEventListener('click', () => {
+    if (selectedGroup && selectedTopic) {
+      copyText('Группа тем/тема - "' + selectedGroup + '" / "' + selectedTopic.topic + '"');
+    }
   });
 }
 
-// ============================================================
-// 3. ОТРИСОВКА ГРУПП
-// ============================================================
 function renderGroups(query){
   groupsList.innerHTML = '';
   const visible = [];
@@ -144,8 +123,6 @@ function renderGroups(query){
     const topics  = topicsOf(group);
     const matches = topics.filter(t => t.topic.toLowerCase().includes(query));
 
-    // При поиске показываем группу, если совпало её название
-    // или в ней есть подходящие темы
     if (query && !group.toLowerCase().includes(query) && matches.length === 0) continue;
 
     visible.push(group);
@@ -173,7 +150,6 @@ function selectGroup(group){
   selectedTopic = null;
   resultSection.style.display = 'none';
 
-  // Подсвечиваем выбранную карточку
   groupsList.querySelectorAll('.group-item').forEach(el => {
     el.classList.toggle('selected', el.dataset.group === group);
   });
@@ -183,15 +159,10 @@ function selectGroup(group){
   topicsSection.scrollIntoView({ behavior: 'smooth' });
 }
 
-// ============================================================
-// 4. ОТРИСОВКА ТЕМ
-// ============================================================
 function renderTopics(group, query){
   topicsList.innerHTML = '';
   let topics = topicsOf(group);
 
-  // Если поиск совпал с названием группы, но не с темами —
-  // показываем все темы группы
   if (query){
     const matches = topics.filter(t => t.topic.toLowerCase().includes(query));
     if (matches.length > 0) topics = matches;
@@ -221,9 +192,6 @@ function selectTopic(rowEl, topic){
   resultSection.scrollIntoView({ behavior: 'smooth' });
 }
 
-// ============================================================
-// 5. КОПИРОВАНИЕ В БУФЕР ОБМЕНА
-// ============================================================
 function copyText(text){
   if (!text) return;
   const onSuccess = () => {
@@ -236,7 +204,7 @@ function copyText(text){
       .then(onSuccess)
       .catch(() => fallbackCopy(text, onSuccess));
   } else {
-    fallbackCopy(text, onSuccess);   // запасной вариант
+    fallbackCopy(text, onSuccess);
   }
 }
 
@@ -264,9 +232,6 @@ function showNotification(message){
   notifyTimer = setTimeout(() => notification.classList.remove('show'), 2000);
 }
 
-// ============================================================
-// 6. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ============================================================
 function getGroups(){
   const groups = [];
   const seen = new Set();
@@ -293,17 +258,13 @@ function plural(n, one, few, many){
 function escapeHtml(s){
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-// ============================================================
-// 7. КНОПКА «НАВЕРХ»
-// ============================================================
+
 const scrollTopBtn = document.getElementById('scrollTopBtn');
 
-// Показываем кнопку, когда прокрутили страницу вниз
 window.addEventListener('scroll', () => {
   scrollTopBtn.classList.toggle('show', window.scrollY > 300);
 });
 
-// Плавная прокрутка в самый верх
 scrollTopBtn.addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
