@@ -11,36 +11,28 @@
     <div class="container">
         <h1>📋 Подбор группы тем и темы</h1>
 
-        <!-- ДОПОЛНЕНИЕ 1: счётчик групп и тем -->
         <p class="stats" id="stats"></p>
 
-        <!-- Поисковая строка -->
         <div class="search-block">
             <input type="text" id="searchInput" placeholder="🔍 Поиск по теме или группе...">
         </div>
 
-        <!-- Выбор группы тем -->
         <div class="section">
             <h2>1. Выберите группу тем</h2>
             <div id="groupsList" class="list"></div>
         </div>
 
-        <!-- Выбор темы -->
         <div class="section" id="topicsSection" style="display: none;">
             <h2>2. Выберите тему</h2>
             <div id="topicsList" class="list"></div>
         </div>
 
-        <!-- Результат и копирование -->
         <div class="section" id="resultSection" style="display: none;">
             <h2>3. Результат</h2>
             <div class="result-box">
                 <p><strong>Группа:</strong> <span id="selectedGroup"></span></p>
                 <p><strong>Тема:</strong> <span id="selectedTopic"></span></p>
-
-                <!-- ДОПОЛНЕНИЕ 2: описание темы -->
                 <p><strong>Описание:</strong> <span id="selectedDescription"></span></p>
-
                 <button id="copyGroupBtn" class="btn">📋 Копировать группу</button>
                 <button id="copyTopicBtn" class="btn">📋 Копировать тему</button>
                 <button id="copyBothBtn" class="btn btn-green">📋 Копировать всё</button>
@@ -49,7 +41,8 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
     <button id="scrollTopBtn" class="scroll-top" title="Наверх">↑</button>
+
+    <script src="script.js"></script>
 </body>
 </html>
