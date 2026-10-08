@@ -62,6 +62,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 html { scroll-padding-top: calc(var(--top-h) + 16px); }
 
 body {
@@ -443,6 +445,94 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .result-title { font-weight: 650; font-size: 16.5px; line-height: 1.35; }
 .result-desc { font-size: 14px; color: var(--muted); line-height: 1.5; }
 
+/* ---------- примечания ---------- */
+
+.notes-btn { position: relative; display: inline-flex; gap: 8px; width: auto; padding: 0 12px; text-decoration: none; font-size: 14.5px; font-weight: 550; }
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.nc {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  vertical-align: 2px;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.nc svg { width: 12px; height: 12px; }
+.side-topics .nc { height: 18px; margin-left: 6px; padding: 0 6px; font-size: 11px; }
+
+.link-btn { border: 0; background: none; padding: 0; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-btn:hover { color: var(--text); }
+.link-btn.danger:hover { color: var(--conf); }
+.link-btn:disabled { opacity: .5; cursor: default; }
+.btn-sm { height: 32px; padding: 0 12px; font-size: 13.5px; }
+.btn:disabled { opacity: .6; cursor: default; }
+.h-link { margin-left: auto; font-size: 13px; font-weight: 550; text-transform: none; letter-spacing: 0; color: var(--accent); text-decoration: none; }
+.h-link:hover { text-decoration: underline; }
+
+.notes { margin-top: 28px; }
+.notes .h-small { margin-top: 0; }
+.notes-list { display: grid; gap: 10px; }
+
+.note { padding: 12px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.note-topic { margin-bottom: 8px; }
+.note-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 13px; color: var(--muted); }
+.note-meta b { color: var(--text); font-weight: 650; }
+.note-text { margin: 6px 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-text a { color: var(--accent); }
+.note-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+
+.note-edit, .note-form textarea, .note-form input, .notes-filter {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.note-edit:focus, .note-form textarea:focus, .note-form input:focus, .notes-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.note-edit { display: block; min-height: 96px; margin: 8px 0; resize: vertical; }
+
+.note-form { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px dashed var(--line); }
+.note-form textarea { min-height: 84px; resize: vertical; }
+.note-form-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.note-form-row input { flex: 1 1 220px; width: auto; }
+.note-form-row .btn { height: auto; min-height: 42px; }
+.note-hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+.notes-state { margin: 0; padding: 12px 16px; border-radius: 12px; border: 1px dashed var(--line); }
+
+.notes-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.notes-head h1 { font-size: clamp(24px, 3vw, 30px); letter-spacing: -.02em; }
+.notes-sub { margin: 6px 0 14px; }
+.notes-filter { max-width: 520px; margin-bottom: 14px; }
+
 /* ---------- подвал, тост, «наверх» ---------- */
 
 .foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
@@ -496,6 +586,9 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   .topbar { gap: 8px; padding: 0 12px; }
   .menu-btn { display: inline-grid; }
   .brand { display: none; }
+  .notes-btn { padding: 0 9px; }
+  .notes-btn-text { display: none; }
+  .notes-btn .badge { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; font-size: 11px; }
   .search-kbd { display: none; }
 
   .sidebar {
@@ -530,6 +623,6 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 }
 
 @media print {
-  .topbar, .sidebar, .to-top, .toast, .copy-actions, .star { display: none !important; }
+  .topbar, .sidebar, .to-top, .toast, .copy-actions, .star, .note-form, .note-actions, .notes-btn { display: none !important; }
   .main { padding: 0; max-width: none; }
 }

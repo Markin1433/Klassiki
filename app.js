@@ -144,12 +144,13 @@ for (const t of TOPICS) {
     ctx: norm(t.group.name + ' ' + (t.sub || '')),
     must: norm(blocksText(t.must)),
     conf: norm(t.conf.map(c => c.text).join(' ') + ' ' + (t.confNote || '')),
+    notes: '',
   };
   t.ixWords = {};
   for (const f in t.ix) t.ixWords[f] = t.ix[f].split(' ');
 }
 
-const WEIGHTS = { title: 12, ctx: 4, must: 3, conf: 1 };
+const WEIGHTS = { title: 12, ctx: 4, must: 3, notes: 2, conf: 1 };
 
 function parseQuery(q) {
   let words = norm(q).split(' ').filter(Boolean);
@@ -257,7 +258,7 @@ function renderSidebar(active) {
       html += '<ul class="side-topics">';
       for (const t of g.topics) {
         html += '<li><a href="#/t/' + t.id + '"' + (active === t ? ' class="current" aria-current="page"' : '') + '>' +
-          esc(t.title) + '</a></li>';
+          esc(t.title) + ncHtml(t.id) + '</a></li>';
       }
       html += '</ul>';
     }
@@ -305,6 +306,265 @@ function starBtn(t) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></button>';
 }
 
+/* ---------- примечания: общие для всех, хранятся в Google Таблице (tools/notes-apps-script.gs) ---------- */
+
+const NOTES_URL = String((window.KLASSIKI_CONFIG || {}).notesUrl || '').trim();
+const notes = { list: [], byTopic: new Map(), loaded: false, error: '', at: 0, pending: null };
+let current = null;   // что открыто: тема, группа, 'home', 'notes', 'search'
+
+function setNotes(list) {
+  notes.list = (Array.isArray(list) ? list : []).filter(n => n && n.id && n.topicId);
+  notes.byTopic = new Map();
+  for (const n of notes.list) {
+    if (!notes.byTopic.has(n.topicId)) notes.byTopic.set(n.topicId, []);
+    notes.byTopic.get(n.topicId).push(n);
+  }
+  for (const arr of notes.byTopic.values()) arr.sort((a, b) => String(a.created).localeCompare(String(b.created)));
+  for (const t of TOPICS) {
+    t.ix.notes = norm((notes.byTopic.get(t.id) || []).map(n => n.text).join(' '));
+    t.ixWords.notes = t.ix.notes ? t.ix.notes.split(' ') : [];
+  }
+  store.set('notes-cache', notes.list);
+}
+
+const noteCount = id => (notes.byTopic.get(id) || []).length;
+
+async function notesRequest(body) {
+  const opts = body
+    ? { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) }
+    : { cache: 'no-store' };
+  let res;
+  try {
+    res = await fetch(NOTES_URL, opts);
+  } catch (e) {
+    throw new Error('нет связи с хранилищем примечаний');
+  }
+  if (!res.ok) throw new Error('хранилище ответило ошибкой ' + res.status);
+  let data;
+  try { data = await res.json(); } catch (e) { throw new Error('хранилище вернуло непонятный ответ'); }
+  if (!data.ok) throw new Error(data.error || 'ошибка хранилища');
+  return data.notes;
+}
+
+function loadNotes(force) {
+  if (!NOTES_URL) return Promise.resolve();
+  if (notes.pending) return notes.pending;
+  if (!force && notes.loaded && Date.now() - notes.at < 30000) return Promise.resolve();
+  notes.pending = notesRequest()
+    .then(list => { setNotes(list); notes.loaded = true; notes.error = ''; notes.at = Date.now(); })
+    .catch(err => { notes.error = err.message; })
+    .finally(() => { notes.pending = null; refreshNotesUI(); });
+  return notes.pending;
+}
+
+async function changeNotes(body, okMsg) {
+  try {
+    const list = await notesRequest(body);
+    setNotes(list);
+    notes.loaded = true;
+    notes.error = '';
+    notes.at = Date.now();
+    if (okMsg) toast(okMsg);
+    return true;
+  } catch (err) {
+    toast('Не сохранилось: ' + err.message);
+    return false;
+  } finally {
+    refreshNotesUI(true);
+  }
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/* текст примечания: экранирование + кликабельные ссылки */
+function linkify(text) {
+  const re = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?)»]/g;
+  let out = '', last = 0, m;
+  while ((m = re.exec(text))) {
+    out += esc(text.slice(last, m.index)) +
+      '<a href="' + esc(m[0]) + '" target="_blank" rel="noopener noreferrer">' + esc(m[0]) + '</a>';
+    last = m.index + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+
+const NC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg>';
+
+/* счётчик примечаний у темы; обновляется на месте после загрузки */
+function ncHtml(id) {
+  if (!NOTES_URL) return '';
+  const n = noteCount(id);
+  return '<span class="nc" data-nc="' + id + '" title="Примечаний: ' + n + '"' + (n ? '' : ' hidden') + '>' +
+    NC_ICON + '<span>' + n + '</span></span>';
+}
+
+function noteHtml(n, showTopic) {
+  const t = BY_ID.get(n.topicId);
+  const edited = n.updated && new Date(n.updated) - new Date(n.created) > 60000;
+  let head = '';
+  if (showTopic) {
+    head = t ? '<div class="note-topic">' + topicLink(t, { showGroup: true }) + '</div>'
+      : '<div class="note-topic"><span class="muted">Тема не найдена: ' + esc(n.topic || n.topicId) + '</span></div>';
+  }
+  return '<article class="note" data-note="' + esc(n.id) + '">' + head +
+    '<div class="note-meta"><b>' + esc(n.author || 'Без имени') + '</b><span>' + fmtDate(n.created) +
+    (edited ? ' · изменено ' + fmtDate(n.updated) : '') + '</span></div>' +
+    '<div class="note-text">' + linkify(String(n.text)) + '</div>' +
+    '<div class="note-actions"><button class="link-btn" data-note-edit>Изменить</button>' +
+    '<button class="link-btn danger" data-note-del>Удалить</button></div></article>';
+}
+
+function notesStateHtml(emptyText) {
+  if (notes.error && !notes.loaded) {
+    return '<p class="notes-state">Не удалось загрузить примечания: ' + esc(notes.error) +
+      '. <button class="link-btn" data-notes-reload>Повторить</button></p>';
+  }
+  if (!notes.loaded) return '<p class="notes-state muted">Загрузка примечаний…</p>';
+  return '<p class="notes-state muted">' + emptyText + '</p>';
+}
+
+function topicNotesHtml(t) {
+  const list = notes.byTopic.get(t.id) || [];
+  if (!list.length) return notesStateHtml('Примечаний пока нет — добавьте первое.');
+  return list.map(n => noteHtml(n, false)).join('');
+}
+
+function notesSectionHtml(t) {
+  if (!NOTES_URL) return '';
+  return '<section class="notes" id="notes"><h2 class="h-small">Примечания коллег ' + ncHtml(t.id) + '</h2>' +
+    '<div class="notes-list" id="notesList">' + topicNotesHtml(t) + '</div>' +
+    '<form class="note-form" id="noteForm" data-topic="' + t.id + '">' +
+    '<textarea name="text" rows="3" maxlength="3000" required ' +
+    'placeholder="Новое примечание: что относить к этой теме, частые ошибки, договорённости…"></textarea>' +
+    '<div class="note-form-row">' +
+    '<input name="author" maxlength="80" autocomplete="name" placeholder="Ваше имя (необязательно)" value="' +
+    esc(store.get('author', '')) + '">' +
+    '<button class="btn btn-primary" type="submit">Добавить примечание</button></div>' +
+    '<p class="note-hint">Примечания видны всем, кто открывает сайт, и все могут их изменить. ' +
+    '<kbd>Ctrl</kbd>+<kbd>Enter</kbd> — отправить.</p></form></section>';
+}
+
+function allNotesHtml(q) {
+  const k = norm(q || '');
+  let list = notes.list.slice().sort((a, b) => String(b.created).localeCompare(String(a.created)));
+  if (k) {
+    list = list.filter(n => {
+      const t = BY_ID.get(n.topicId);
+      return norm([n.text, n.author, n.topic, n.group, t ? t.title : ''].join(' ')).includes(k);
+    });
+  }
+  if (!list.length) return notesStateHtml(k ? 'Ничего не найдено.' : 'Примечаний пока нет. Их можно добавить на странице любой темы.');
+  return list.map(n => noteHtml(n, true)).join('');
+}
+
+function latestNotesHtml() {
+  const list = notes.list.slice().sort((a, b) => String(b.created).localeCompare(String(a.created))).slice(0, 3);
+  if (!list.length) return '';
+  return '<h2 class="h-small">Новые примечания <a class="h-link" href="#/notes">все →</a></h2>' +
+    '<div class="notes-list">' + list.map(n => noteHtml(n, true)).join('') + '</div>';
+}
+
+/* Перерисовывает только части с примечаниями: формы и открытое редактирование не сбрасываются. */
+function refreshNotesUI(force) {
+  if (!NOTES_URL) return;
+  const total = notes.list.length;
+  const badge = $('#notesBadge');
+  badge.textContent = total;
+  badge.hidden = !total;
+  document.querySelectorAll('[data-nc]').forEach(el => {
+    const n = noteCount(el.getAttribute('data-nc'));
+    el.hidden = !n;
+    el.title = 'Примечаний: ' + n;
+    el.querySelector('span').textContent = n;
+  });
+  if (!force && view.querySelector('.note.editing')) return;   // не мешаем редактировать
+  const box = document.getElementById('notesList');
+  if (box && current && current.must) box.innerHTML = topicNotesHtml(current);
+  const all = document.getElementById('notesAll');
+  if (all) all.innerHTML = allNotesHtml(($('#notesFilter') || {}).value);
+  const latest = document.getElementById('homeNotes');
+  if (latest) latest.innerHTML = latestNotesHtml();
+}
+
+function startEdit(article) {
+  const n = notes.list.find(x => x.id === article.getAttribute('data-note'));
+  if (!n) return;
+  article.classList.add('editing');
+  article.querySelector('.note-text').outerHTML =
+    '<textarea class="note-edit" rows="4" maxlength="3000">' + esc(n.text) + '</textarea>';
+  article.querySelector('.note-actions').innerHTML =
+    '<button class="btn btn-primary btn-sm" data-note-save>Сохранить</button>' +
+    '<button class="btn btn-sm" data-note-cancel>Отмена</button>';
+  const ta = article.querySelector('.note-edit');
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-note-edit], [data-note-del], [data-note-save], [data-note-cancel], [data-notes-reload]');
+  if (!btn) return;
+  if (btn.hasAttribute('data-notes-reload')) {
+    btn.disabled = true;
+    await loadNotes(true);
+    btn.disabled = false;
+    toast(notes.error ? 'Не удалось обновить: ' + notes.error : 'Примечания обновлены');
+    return;
+  }
+  const article = btn.closest('.note');
+  const id = article.getAttribute('data-note');
+  if (btn.hasAttribute('data-note-edit')) {
+    startEdit(article);
+  } else if (btn.hasAttribute('data-note-cancel')) {
+    article.classList.remove('editing');
+    refreshNotesUI(true);
+  } else if (btn.hasAttribute('data-note-save')) {
+    const text = article.querySelector('.note-edit').value.trim();
+    if (!text) { toast('Примечание пустое'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Сохранение…';
+    const ok = await changeNotes({ action: 'edit', id, text }, 'Примечание изменено');
+    if (!ok) { btn.disabled = false; btn.textContent = 'Сохранить'; }
+  } else if (btn.hasAttribute('data-note-del')) {
+    if (!confirm('Удалить примечание? Владелец таблицы сможет его восстановить.')) return;
+    btn.disabled = true;
+    await changeNotes({ action: 'delete', id }, 'Примечание удалено');
+  }
+});
+
+document.addEventListener('submit', async e => {
+  const form = e.target.closest('#noteForm');
+  if (!form) return;
+  e.preventDefault();
+  const t = BY_ID.get(form.getAttribute('data-topic'));
+  const text = form.elements.text.value.trim();
+  const author = form.elements.author.value.trim();
+  if (!t || !text) { toast('Напишите текст примечания'); return; }
+  store.set('author', author);
+  const btn = form.querySelector('button[type=submit]');
+  btn.disabled = true;
+  btn.textContent = 'Сохранение…';
+  const ok = await changeNotes({ action: 'add', topicId: t.id, group: t.group.name, topic: t.name, author, text },
+    'Примечание добавлено');
+  btn.disabled = false;
+  btn.textContent = 'Добавить примечание';
+  if (ok) form.elements.text.value = '';
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    if (e.target.closest && e.target.closest('#noteForm')) { e.preventDefault(); e.target.closest('#noteForm').requestSubmit(); }
+    else if (e.target.classList && e.target.classList.contains('note-edit')) {
+      e.preventDefault();
+      const save = e.target.closest('.note').querySelector('[data-note-save]');
+      if (save && !save.disabled) save.click();
+    }
+  }
+});
+
 /* ---------- экраны ---------- */
 
 function renderHome() {
@@ -322,6 +582,8 @@ function renderHome() {
       fav.map(t => topicLink(t, { showGroup: true })).join('') + '</div></section>';
   }
 
+  if (NOTES_URL) html += '<section id="homeNotes">' + latestNotesHtml() + '</section>';
+
   html += '<h2 class="h-small">Группы тем</h2><div class="grid">';
   for (const g of GROUPS) {
     html += '<a class="gcard" href="#/g/' + g.id + '" style="--gc:' + g.color + '">' +
@@ -333,6 +595,7 @@ function renderHome() {
   html += '</div>';
   html += footer();
   view.innerHTML = html;
+  current = 'home';
   renderSidebar(null);
   document.title = 'Классификатор инцидентов';
 }
@@ -362,13 +625,14 @@ function renderGroup(g, subIdx) {
     html += '<div class="trows">';
     for (const t of sec.topics) {
       const s = snippet(t, []);
-      html += '<a class="trow" href="#/t/' + t.id + '"><span class="trow-title">' + esc(t.title) + '</span>' +
+      html += '<a class="trow" href="#/t/' + t.id + '"><span class="trow-title">' + esc(t.title) + ncHtml(t.id) + '</span>' +
         '<span class="trow-desc">' + esc(s.text) + (s.cut ? '…' : '') + '</span></a>';
     }
     html += '</div></section>';
   }
   html += footer();
   view.innerHTML = html;
+  current = g;
   renderSidebar(g);
   document.title = g.title + ' — Классификатор инцидентов';
   if (subIdx != null) {
@@ -426,6 +690,7 @@ function renderTopic(t) {
     html += '<p class="muted">Не указано.</p>';
   }
   html += '</section></div>';
+  html += notesSectionHtml(t);
 
   if (back.length) {
     html += '<section class="related"><h2 class="h-small">Эту тему упоминают в «Не путать»</h2>' +
@@ -439,6 +704,7 @@ function renderTopic(t) {
   html += '</article>' + footer();
 
   view.innerHTML = html;
+  current = t;
   renderSidebar(t);
   document.title = t.title + ' — Классификатор инцидентов';
 }
@@ -460,17 +726,40 @@ function renderSearch(q) {
   results.slice(0, 80).forEach((r, i) => {
     const t = r.t;
     const s = snippet(t, terms);
+    const inNotes = terms.some(term => t.ixWords.notes.some(w => fits(w, term.stem)));
     html += '<li><a class="result' + (i === 0 ? ' sel' : '') + '" href="#/t/' + t.id + '" style="--gc:' + t.group.color + '">' +
-      '<span class="result-ctx"><span class="dot"></span>' + esc(t.group.title) + (t.sub ? ' · ' + esc(t.sub) : '') + '</span>' +
-      '<span class="result-title">' + highlight(esc(t.title), terms) + '</span>' +
+      '<span class="result-ctx"><span class="dot"></span>' + esc(t.group.title) + (t.sub ? ' · ' + esc(t.sub) : '') +
+      (inNotes ? '<span class="chip">есть в примечаниях</span>' : '') + '</span>' +
+      '<span class="result-title">' + highlight(esc(t.title), terms) + ncHtml(t.id) + '</span>' +
       '<span class="result-desc">' + (s.lead ? '…' : '') + highlight(esc(s.text), terms) + (s.cut ? '…' : '') + '</span>' +
       '</a></li>';
   });
   html += '</ol>';
   if (results.length > 80) html += '<p class="muted">Показаны первые 80 — уточните запрос.</p>';
   view.innerHTML = html;
+  current = 'search';
   renderSidebar(null);
   document.title = 'Поиск: ' + q + ' — Классификатор инцидентов';
+}
+
+function renderNotesPage() {
+  let html = '<nav class="crumbs"><a href="#/">Все группы</a></nav>';
+  if (!NOTES_URL) {
+    html += '<h1 class="h-results">Примечания</h1><p class="empty">Примечания пока не подключены.</p>';
+  } else {
+    html += '<header class="notes-head"><h1>Примечания коллег</h1>' +
+      '<button class="btn btn-sm" data-notes-reload>Обновить</button></header>' +
+      '<p class="muted notes-sub">Добавить примечание можно на странице любой темы. Здесь — все примечания, сначала новые.</p>' +
+      '<input class="notes-filter" id="notesFilter" type="search" autocomplete="off" ' +
+      'placeholder="Фильтр по тексту, теме или автору…" aria-label="Фильтр примечаний">' +
+      '<div class="notes-list" id="notesAll">' + allNotesHtml('') + '</div>';
+  }
+  view.innerHTML = html + footer();
+  current = 'notes';
+  renderSidebar(null);
+  document.title = 'Примечания — Классификатор инцидентов';
+  const f = $('#notesFilter');
+  if (f) f.addEventListener('input', () => { $('#notesAll').innerHTML = allNotesHtml(f.value); });
 }
 
 function footer() {
@@ -491,7 +780,10 @@ function route() {
     return;
   }
   if (document.activeElement !== input) input.value = '';
-  if ((m = h.match(/^\/t\/([\w-]+)/)) && BY_ID.has(m[1])) {
+  if (h === '/notes') {
+    renderNotesPage();
+    loadNotes(false);
+  } else if ((m = h.match(/^\/t\/([\w-]+)/)) && BY_ID.has(m[1])) {
     renderTopic(BY_ID.get(m[1]));
   } else if ((m = h.match(/^\/g\/([\w-]+)(?:\/(\d+))?/)) && BY_ID.has(m[1])) {
     renderGroup(BY_ID.get(m[1]), m[2] != null ? +m[2] : null);
@@ -542,7 +834,8 @@ input.addEventListener('keydown', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === '/' && document.activeElement !== input && !e.ctrlKey && !e.metaKey && !e.altKey) {
+  const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
+  if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
     input.focus();
     input.select();
@@ -623,5 +916,12 @@ window.addEventListener('hashchange', route);
 if (!GROUPS.length) {
   view.innerHTML = '<p class="empty">Не удалось загрузить data.js. Проверьте, что файл лежит рядом с index.html.</p>';
 } else {
+  setNotes(NOTES_URL ? store.get('notes-cache', []) : []);
+  if (NOTES_URL) {
+    $('#notesBtn').hidden = false;
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) loadNotes(false); });
+  }
   route();
+  refreshNotesUI();
+  loadNotes(true);
 }
