@@ -267,8 +267,6 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, black); }
 .btn-ghost { background: transparent; }
 
-.link-btn { border: 0; background: none; padding: 0; color: var(--muted); font: inherit; font-size: 12px; text-transform: none; letter-spacing: 0; text-decoration: underline; cursor: pointer; }
-.link-btn:hover { color: var(--text); }
 
 .chip {
   display: inline-block;
@@ -299,8 +297,6 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .hint { display: inline-block; margin-top: 6px; font-size: 14px; }
 .stats { display: flex; gap: 20px; margin-top: 16px; color: var(--muted); font-size: 14.5px; }
 .stats b { color: var(--text); font-size: 18px; }
-
-.quick { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 32px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 
@@ -422,12 +418,6 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 
 .related .h-small { margin-top: 28px; }
 
-.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 32px; }
-.pager-link { display: grid; gap: 2px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-decoration: none; font-weight: 600; font-size: 14.5px; line-height: 1.35; }
-.pager-link span { font-size: 12.5px; font-weight: 500; color: var(--muted); }
-.pager-link.next { text-align: right; }
-.pager-link:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-
 .meta { margin-top: 24px; font-size: 12.5px; color: var(--muted); }
 
 /* ---------- поиск ---------- */
@@ -505,8 +495,7 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
   :root { --top-h: 60px; }
   .topbar { gap: 8px; padding: 0 12px; }
   .menu-btn { display: inline-grid; }
-  .brand { width: auto; }
-  .brand-text { display: none; }
+  .brand { display: none; }
   .search-kbd { display: none; }
 
   .sidebar {
@@ -530,11 +519,8 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 }
 
 @media (max-width: 560px) {
-  .brand { display: none; }
   .copy-actions { width: 100%; }
   .copy-actions .btn { flex: 1; padding: 0 8px; }
-  .pager { grid-template-columns: 1fr; }
-  .pager-link.next { text-align: left; }
   .ghead { padding: 18px 16px 18px 20px; }
   .card { padding: 16px; }
 }
@@ -544,6 +530,6 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 }
 
 @media print {
-  .topbar, .sidebar, .to-top, .toast, .copy-actions, .star, .pager { display: none !important; }
+  .topbar, .sidebar, .to-top, .toast, .copy-actions, .star { display: none !important; }
   .main { padding: 0; max-width: none; }
 }

@@ -9,9 +9,8 @@ const BACKLINKS = new Map();      // id темы → темы, где она у�
 
 for (const g of GROUPS) {
   BY_ID.set(g.id, g);
-  g.topics.forEach((t, i) => {
+  g.topics.forEach(t => {
     t.group = g;
-    t.idx = i;
     t.subIdx = t.sub ? g.subs.findIndex(s => s.name === t.sub) : -1;
     TOPICS.push(t);
     BY_ID.set(t.id, t);
@@ -59,6 +58,8 @@ const topicsWord = n => n + ' ' + plural(n, 'тема', 'темы', 'тем');
 function copyString(t) {
   return 'Группа тем/тема - "' + t.group.name + '" / "' + t.name + '"';
 }
+
+try { localStorage.removeItem('klassiki-recent'); } catch (e) { /* недавние темы больше не ведутся */ }
 
 const store = {
   get(key, def) {
@@ -308,7 +309,6 @@ function starBtn(t) {
 
 function renderHome() {
   const fav = store.get('fav', []).map(id => BY_ID.get(id)).filter(Boolean);
-  const recent = store.get('recent', []).map(id => BY_ID.get(id)).filter(Boolean);
   let html = '<section class="hero">' +
     '<h1>Подбор группы тем и темы</h1>' +
     '<p class="lead">Начните вводить слова из обращения в поиске — он ищет по названиям тем, описаниям ' +
@@ -317,17 +317,9 @@ function renderHome() {
     '<div class="stats"><span><b>' + GROUPS.length + '</b> групп тем</span><span><b>' + TOPICS.length + '</b> тем</span></div>' +
     '</section>';
 
-  if (fav.length || recent.length) {
-    html += '<section class="quick">';
-    if (fav.length) {
-      html += '<div class="quick-col"><h2 class="h-small">Избранное</h2><div class="tlinks">' +
-        fav.map(t => topicLink(t, { showGroup: true })).join('') + '</div></div>';
-    }
-    if (recent.length) {
-      html += '<div class="quick-col"><h2 class="h-small">Недавние <button class="link-btn" data-clear-recent>очистить</button></h2>' +
-        '<div class="tlinks">' + recent.map(t => topicLink(t, { showGroup: true })).join('') + '</div></div>';
-    }
-    html += '</section>';
+  if (fav.length) {
+    html += '<section><h2 class="h-small">Избранное</h2><div class="tlinks">' +
+      fav.map(t => topicLink(t, { showGroup: true })).join('') + '</div></section>';
   }
 
   html += '<h2 class="h-small">Группы тем</h2><div class="grid">';
@@ -390,7 +382,6 @@ function renderTopic(t) {
   const sub = t.subIdx >= 0 ? g.subs[t.subIdx] : null;
   const siblings = g.topics.filter(x => x.subIdx === t.subIdx && x !== t);
   const back = (BACKLINKS.get(t.id) || []).filter(x => x !== t);
-  const prev = g.topics[t.idx - 1], next = g.topics[t.idx + 1];
 
   let html = '<nav class="crumbs"><a href="#/">Все группы</a><span>›</span>' +
     '<a href="#/g/' + g.id + '">' + esc(g.title) + '</a>' +
@@ -444,20 +435,12 @@ function renderTopic(t) {
     html += '<section class="related"><h2 class="h-small">' + (sub ? 'Другие темы блока «' + esc(sub.name) + '»' : 'Другие темы группы') +
       '</h2><div class="tlinks">' + siblings.map(x => topicLink(x)).join('') + '</div></section>';
   }
-  html += '<nav class="pager">' +
-    (prev ? '<a class="pager-link" href="#/t/' + prev.id + '"><span>← Предыдущая</span>' + esc(prev.title) + '</a>' : '<span></span>') +
-    (next ? '<a class="pager-link next" href="#/t/' + next.id + '"><span>Следующая →</span>' + esc(next.title) + '</a>' : '<span></span>') +
-    '</nav>';
   html += '<p class="meta">Страница ' + t.page + ' в своде документации · официальное название: ' + esc(t.name) + '</p>';
   html += '</article>' + footer();
 
   view.innerHTML = html;
   renderSidebar(t);
   document.title = t.title + ' — Классификатор инцидентов';
-
-  const recent = store.get('recent', []).filter(id => id !== t.id);
-  recent.unshift(t.id);
-  store.set('recent', recent.slice(0, 8));
 }
 
 let selIndex = 0;
@@ -595,11 +578,10 @@ function copyText(text) {
 }
 
 document.addEventListener('click', e => {
-  const btn = e.target.closest('[data-copy], [data-copy-all], [data-star], [data-clear-recent]');
+  const btn = e.target.closest('[data-copy], [data-copy-all], [data-star]');
   if (!btn) return;
   if (btn.hasAttribute('data-copy')) copyText(btn.getAttribute('data-copy'));
   else if (btn.hasAttribute('data-copy-all')) copyText(copyString(BY_ID.get(btn.getAttribute('data-copy-all'))));
-  else if (btn.hasAttribute('data-clear-recent')) { store.set('recent', []); renderHome(); }
   else {
     const id = btn.getAttribute('data-star');
     let fav = store.get('fav', []);
