@@ -252,7 +252,7 @@ function renderSidebar(active) {
     const open = activeGroup === g;
     html += '<li class="side-group' + (open ? ' open' : '') + '" style="--gc:' + g.color + '">' +
       '<a href="#/g/' + g.id + '" class="side-link' + (active === g ? ' current' : '') + '">' +
-      '<span class="dot"></span><span class="side-title">' + esc(g.title) + '</span>' +
+      '<span class="dot"></span><span class="side-title">' + esc(g.title) + '</span>' + ncHtml(g.id) +
       '<span class="side-n">' + g.topics.length + '</span></a>';
     if (open) {
       html += '<ul class="side-topics">';
@@ -327,7 +327,12 @@ function setNotes(list) {
   store.set('notes-cache', notes.list);
 }
 
-const noteCount = id => (notes.byTopic.get(id) || []).length;
+/* число примечаний у темы, а для группы — сумма по всем её темам */
+function noteCount(id) {
+  const g = BY_ID.get(id);
+  if (g && g.topics) return g.topics.reduce((n, t) => n + (notes.byTopic.get(t.id) || []).length, 0);
+  return (notes.byTopic.get(id) || []).length;
+}
 
 async function notesRequest(body) {
   const opts = body
@@ -394,7 +399,7 @@ function linkify(text) {
 
 const NC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg>';
 
-/* счётчик примечаний у темы; обновляется на месте после загрузки */
+/* счётчик примечаний у темы или группы; обновляется на месте после загрузки */
 function ncHtml(id) {
   if (!NOTES_URL) return '';
   const n = noteCount(id);
