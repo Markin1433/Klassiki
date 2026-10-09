@@ -495,6 +495,60 @@ function refreshNotesUI(force) {
   if (latest) latest.innerHTML = latestNotesHtml();
 }
 
+/* выгрузка всех примечаний в Excel (xlsx.js), в порядке классификатора */
+async function exportNotes(btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Готовлю файл…';
+  try {
+    await loadNotes(true);
+    if (notes.error && !notes.loaded) { toast('Не удалось загрузить примечания: ' + notes.error); return; }
+    if (!notes.list.length) { toast('Примечаний пока нет'); return; }
+    const order = new Map(TOPICS.map((t, i) => [t.id, i]));
+    const pos = n => (order.has(n.topicId) ? order.get(n.topicId) : TOPICS.length);
+    const list = notes.list.slice().sort((a, b) => pos(a) - pos(b) || String(a.created).localeCompare(String(b.created)));
+    const base = location.origin + location.pathname;
+    const rows = list.map(n => {
+      const t = BY_ID.get(n.topicId);
+      const edited = n.updated && new Date(n.updated) - new Date(n.created) > 60000;
+      return [
+        n.created, edited ? n.updated : '',
+        t ? t.group.name : n.group, t ? t.name : n.topic,
+        n.author || '', n.text,
+        t ? { url: base + '#/t/' + t.id, label: 'Открыть' } : '',
+      ];
+    });
+    const blob = window.buildXlsx({
+      sheetName: 'Примечания',
+      columns: [
+        { title: 'Создано', width: 17, type: 'date' },
+        { title: 'Изменено', width: 17, type: 'date' },
+        { title: 'Группа тем', width: 30 },
+        { title: 'Тема', width: 48 },
+        { title: 'Автор', width: 18 },
+        { title: 'Примечание', width: 70, type: 'wrap' },
+        { title: 'Ссылка на тему', width: 15, type: 'link' },
+      ],
+      rows,
+    });
+    const d = new Date();
+    const stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'Примечания к классификатору ' + stamp + '.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('Скачан файл: ' + list.length + ' ' + plural(list.length, 'примечание', 'примечания', 'примечаний'));
+  } catch (e) {
+    toast('Не удалось сформировать файл: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
 function startEdit(article) {
   const n = notes.list.find(x => x.id === article.getAttribute('data-note'));
   if (!n) return;
@@ -510,8 +564,12 @@ function startEdit(article) {
 }
 
 document.addEventListener('click', async e => {
-  const btn = e.target.closest('[data-note-edit], [data-note-del], [data-note-save], [data-note-cancel], [data-notes-reload]');
+  const btn = e.target.closest('[data-note-edit], [data-note-del], [data-note-save], [data-note-cancel], [data-notes-reload], [data-notes-export]');
   if (!btn) return;
+  if (btn.hasAttribute('data-notes-export')) {
+    exportNotes(btn);
+    return;
+  }
   if (btn.hasAttribute('data-notes-reload')) {
     btn.disabled = true;
     await loadNotes(true);
@@ -753,7 +811,9 @@ function renderNotesPage() {
     html += '<h1 class="h-results">Примечания</h1><p class="empty">Примечания пока не подключены.</p>';
   } else {
     html += '<header class="notes-head"><h1>Примечания коллег</h1>' +
-      '<button class="btn btn-sm" data-notes-reload>Обновить</button></header>' +
+      '<div class="notes-head-actions">' +
+      '<button class="btn btn-sm" data-notes-export title="Все примечания одним файлом .xlsx">Скачать Excel</button>' +
+      '<button class="btn btn-sm" data-notes-reload>Обновить</button></div></header>' +
       '<p class="muted notes-sub">Добавить примечание можно на странице любой темы. Здесь — все примечания, сначала новые.</p>' +
       '<input class="notes-filter" id="notesFilter" type="search" autocomplete="off" ' +
       'placeholder="Фильтр по тексту, теме или автору…" aria-label="Фильтр примечаний">' +
