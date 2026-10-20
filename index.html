@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Вход</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233f3444'/%3E%3C/svg%3E">
+  <script>
+    try { var t = localStorage.getItem('klassiki-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <style id="gate-style">
+    :root { --bg: #f6f5f8; --card: #fff; --text: #1e1b24; --muted: #6b6676; --line: #e3e0e9; --accent: #4b3f72; --ink: #fff; --err: #b8433f; color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --bg: #141218; --card: #1d1a23; --text: #ece9f2; --muted: #a39dae; --line: #322d3b; --accent: #a898e6; --ink: #141218; --err: #f08a84; color-scheme: dark; }
+    }
+    :root[data-theme="dark"] { --bg: #141218; --card: #1d1a23; --text: #ece9f2; --muted: #a39dae; --line: #322d3b; --accent: #a898e6; --ink: #141218; --err: #f08a84; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+    .gate-card { width: 100%; max-width: 360px; padding: 28px 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--card);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, .06); display: grid; gap: 14px; }
+    h1 { margin: 0; font-size: 22px; }
+    input[type=password] { width: 100%; height: 46px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg);
+      color: var(--text); font: inherit; }
+    input[type=password]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+    label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+    button { height: 46px; border: 0; border-radius: 12px; background: var(--accent); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: default; }
+    .msg { min-height: 1.5em; margin: 0; font-size: 14px; color: var(--err); }
+    body.checking .gate-card { visibility: hidden; }
+  </style>
+</head>
+<body class="checking">
+  <form class="gate-card" id="gateForm">
+    <h1>Вход</h1>
+    <input type="password" id="gatePass" autocomplete="current-password" placeholder="Пароль" aria-label="Пароль" required>
+    <label><input type="checkbox" id="gateRemember" checked> Запомнить на этом устройстве</label>
+    <button type="submit" id="gateBtn">Войти</button>
+    <p class="msg" id="gateMsg" role="alert"></p>
+  </form>
+  <script src="bundle.js?v=466914160c"></script>
+  <script>
+    (function () {
+      'use strict';
+      var B = window.__BUNDLE;
+      var form = document.getElementById('gateForm');
+      var pass = document.getElementById('gatePass');
+      var remember = document.getElementById('gateRemember');
+      var btn = document.getElementById('gateBtn');
+      var msg = document.getElementById('gateMsg');
+      var KEY = 'klassiki-key';
+
+      function fromB64(s) {
+        var bin = atob(s), out = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+      }
+      function toB64(buf) {
+        var bytes = new Uint8Array(buf), bin = '';
+        for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin);
+      }
+      function stored() {
+        try { return JSON.parse(localStorage.getItem(KEY) || sessionStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
+      }
+      function forget() {
+        try { localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); } catch (e) { /* ничего */ }
+      }
+      function showForm(text) {
+        document.body.classList.remove('checking');
+        msg.textContent = text || '';
+        btn.disabled = false;
+        pass.focus();
+      }
+
+      async function keyFromPassword(pw) {
+        var base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+        return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: fromB64(B.salt), iterations: B.iter, hash: 'SHA-256' },
+          base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+      }
+      async function decrypt(key) {
+        var plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(B.iv) }, key, fromB64(B.data));
+        return JSON.parse(new TextDecoder().decode(plain));
+      }
+      function start(app) {
+        document.getElementById('gate-style').remove();
+        var style = document.createElement('style');
+        style.textContent = app.css;
+        document.head.appendChild(style);
+        document.title = app.title;
+        document.body.className = '';
+        document.body.innerHTML = app.html;
+        app.scripts.forEach(function (code) {
+          var s = document.createElement('script');
+          s.textContent = code;
+          document.body.appendChild(s);
+        });
+      }
+
+      if (!B || !window.crypto || !crypto.subtle) {
+        showForm('Браузер не поддерживает вход. Откройте страницу в актуальной версии Chrome, Яндекс Браузера, Edge или Firefox.');
+        btn.disabled = true;
+        return;
+      }
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        btn.disabled = true;
+        msg.textContent = '';
+        try {
+          var key = await keyFromPassword(pass.value);
+          var app = await decrypt(key);
+          var raw = toB64(await crypto.subtle.exportKey('raw', key));
+          var store = remember.checked ? localStorage : sessionStorage;
+          try { forget(); store.setItem(KEY, JSON.stringify({ salt: B.salt, key: raw })); } catch (err) { /* без запоминания */ }
+          start(app);
+        } catch (err) {
+          showForm('Неверный пароль');
+          pass.select();
+        }
+      });
+
+      (async function () {
+        var s = stored();
+        if (s && s.salt === B.salt && s.key) {
+          try {
+            var key = await crypto.subtle.importKey('raw', fromB64(s.key), { name: 'AES-GCM' }, false, ['decrypt']);
+            start(await decrypt(key));
+            return;
+          } catch (e) {
+            forget();
+          }
+        }
+        showForm('');
+      })();
+    })();
+  </script>
+</body>
+</html>
